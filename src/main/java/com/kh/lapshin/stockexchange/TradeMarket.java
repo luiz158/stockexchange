@@ -9,6 +9,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.Scanner;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 public class TradeMarket {
@@ -33,11 +34,9 @@ public class TradeMarket {
                 getOrder(command).ifPresent(inputOrder -> {
                     if (inputOrder.isBuyOrder()) {
 
-                        List<Record> matchingSellRecords = sellRecords.stream()
-                                .filter(Record::haveStocks)
-                                .filter(sellRecord -> isBuyPriceMoreSellPrice(inputOrder, sellRecord))
-                                .sorted(Comparator.comparing(Record::getStockPrice).thenComparing(Record::getRecordId))
-                                .collect(Collectors.toList());
+                        Predicate<Record> availableSellRecords =
+                                sellRecord -> isBuyPriceMoreSellPrice(inputOrder, sellRecord);
+                        List<Record> matchingSellRecords = getMatchingRecords(sellRecords, availableSellRecords);
 
                         for (Record sellRecord : matchingSellRecords) {
                             // 1. Add TRADE record
@@ -62,12 +61,25 @@ public class TradeMarket {
                             buyRecords.add(inputOrder);
                         }
 
+                    } else if (inputOrder.isSellOrder()) {
+
+                        Predicate<Record> availableBuyRecords =
+                                buyRecord -> isBuyPriceMoreSellPrice(buyRecord, inputOrder);
+                        List<Record> matchingBuyRecords = getMatchingRecords(buyRecords, availableBuyRecords);
                     }
                 });
             }
 
             command = readCommandLine(in);
         }
+    }
+
+    private List<Record> getMatchingRecords(List<Record> records, Predicate<Record> availableRecords) {
+        return records.stream()
+                .filter(Record::haveStocks)
+                .filter(availableRecords)
+                .sorted(Comparator.comparing(Record::getStockPrice).thenComparing(Record::getRecordId))
+                .collect(Collectors.toList());
     }
 
     private void performListCommand() {
@@ -82,8 +94,8 @@ public class TradeMarket {
                 .forEach(System.out::println);
     }
 
-    private boolean isBuyPriceMoreSellPrice(Record order, Record sellRecord) {
-        return order.getStockPrice().compareTo(sellRecord.getStockPrice()) >= 0;
+    private boolean isBuyPriceMoreSellPrice(Record buyOrder, Record sellRecord) {
+        return buyOrder.getStockPrice().compareTo(sellRecord.getStockPrice()) >= 0;
     }
 
     private Record createTrade(BigDecimal price, int number) {
